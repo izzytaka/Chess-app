@@ -2,23 +2,28 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#17221e">
 <title>Offline Chess Bot</title>
 <style>
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html { -webkit-text-size-adjust: 100%; }
 
   body {
     margin: 0;
     min-height: 100vh;
+    min-height: 100dvh;
     display: grid;
     place-items: center;
     background: #17221e;
     color: #f4f1e8;
-    font: 16px system-ui, sans-serif;
+    font: 16px system-ui, -apple-system, "Segoe UI", sans-serif;
   }
 
   main {
-    width: min(96vw, 1000px);
+    width: min(100%, 1000px);
     padding: 24px;
     background: #24332d;
     border: 1px solid #40544a;
@@ -34,8 +39,8 @@
   }
 
   h1 { margin: 0; font-size: 1.35rem; }
-  button { cursor: pointer; font: inherit; }
-  .controls { display: flex; gap: 8px; }
+  button { cursor: pointer; font: inherit; touch-action: manipulation; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; }
 
   .controls button {
     padding: 9px 13px;
@@ -46,11 +51,38 @@
     font-weight: 700;
   }
 
-  #status {
-    min-height: 1.5em;
+  .controls button:disabled {
+    opacity: .4;
+    cursor: not-allowed;
+  }
+
+  .statusbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px 14px;
     margin-bottom: 12px;
+  }
+
+  #status {
+    flex: 1 1 220px;
+    min-height: 1.5em;
     color: #d7d8ca;
     font-size: .92rem;
+  }
+
+  #counter { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .chip {
+    padding: 4px 10px;
+    border: 1px solid #4c6358;
+    border-radius: 999px;
+    background: #1b2923;
+    color: #e9e6d8;
+    font-size: .8rem;
+    font-weight: 600;
+    white-space: nowrap;
   }
 
   .chess-layout {
@@ -62,11 +94,15 @@
 
   #board {
     display: grid;
-    grid-template-columns: repeat(8, 1fr);
+    grid-template-columns: repeat(8, minmax(0, 1fr));
     aspect-ratio: 1;
+    width: 100%;
     border: 7px solid #d4c7a6;
     border-radius: 5px;
     overflow: hidden;
+    container-type: inline-size;
+    user-select: none;
+    -webkit-user-select: none;
   }
 
   .sq {
@@ -74,9 +110,12 @@
     display: grid;
     place-items: center;
     aspect-ratio: 1;
+    min-width: 0;
+    min-height: 0;
     padding: 0;
     border: 0;
     border-radius: 0;
+    overflow: hidden;
   }
 
   .light { background: #eee7d4; }
@@ -112,22 +151,33 @@
     to { box-shadow: inset 0 0 0 9px #ed3d4f99; }
   }
 
-  .piece {
-    z-index: 1;
-    font-family: "Segoe UI Symbol", serif;
-    font-size: clamp(28px, 7vw, 58px);
+  /* Pieces: the solid glyph set is used for BOTH colours (coloured with CSS),
+     and the text-variation selector in the glyph strings stops phones from
+     swapping the black pawn for an emoji. Size scales with the board. */
+  .piece, .ghost-piece {
+    font-family: "Noto Sans Symbols 2", "Segoe UI Symbol", "Apple Symbols",
+                 "DejaVu Sans", "Arial Unicode MS", sans-serif;
+    font-variant-emoji: text;
+    font-size: clamp(26px, 7vw, 58px);
+    font-size: 9.6cqw;
     line-height: 1;
+    font-weight: 400;
     user-select: none;
+    -webkit-user-select: none;
   }
+
+  .piece { z-index: 1; }
 
   .white-piece {
     color: #fffdf3;
-    text-shadow: 0 2px 2px #25251f, 0 0 2px #25251f;
+    text-shadow:
+      1px 0 #22221c, -1px 0 #22221c, 0 1px #22221c, 0 -1px #22221c,
+      0 2px 2px #0006;
   }
 
   .black-piece {
-    color: #242a26;
-    text-shadow: 0 1px 1px #fff7;
+    color: #232925;
+    text-shadow: 0 0 1px #fffa, 0 1px 1px #fff7;
   }
 
   .coord {
@@ -156,12 +206,8 @@
   .ghost-piece {
     position: absolute;
     z-index: 4;
-    font-family: "Segoe UI Symbol", serif;
-    font-size: clamp(28px, 7vw, 58px);
-    line-height: 1;
     opacity: .52;
     pointer-events: none;
-    user-select: none;
   }
 
   #bot {
@@ -267,7 +313,7 @@
   }
 
   .win-card button {
-    margin-top: 16px;
+    margin: 16px 6px 0;
     padding: 9px 18px;
     border: 0;
     border-radius: 9px;
@@ -278,21 +324,49 @@
     cursor: pointer;
   }
 
+  .win-card button.secondary {
+    background: transparent;
+    border: 2px solid #f2a8cb;
+    color: #ffd5e7;
+  }
+
   @keyframes pop-in {
     from { transform: scale(.85); opacity: 0; }
     to { transform: scale(1); opacity: 1; }
   }
 
   @media (max-width: 720px) {
-    main { padding: 13px; }
+    body { place-items: start center; }
 
-    header {
-      align-items: flex-start;
-      flex-direction: column;
+    main {
+      padding: 12px 10px 18px;
+      border-radius: 0;
+      border-left: 0;
+      border-right: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
     }
 
-    .chess-layout { grid-template-columns: 1fr; }
-    .piece, .ghost-piece { font-size: 11vw; }
+    header {
+      align-items: stretch;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    h1 { font-size: 1.2rem; }
+
+    .controls { display: grid; grid-template-columns: repeat(3, 1fr); }
+    .controls button { padding: 11px 6px; font-size: .9rem; }
+
+    .chess-layout { grid-template-columns: 1fr; gap: 12px; }
+    #board { border-width: 4px; }
+    .selected { box-shadow: inset 0 0 0 3px #e2a62e; }
+    .capture::after { border-width: 3px; }
+    .coord { font-size: 8px; left: 2px; top: 1px; }
+    .ghost-origin-mark { inset: 3px; border-width: 2px; }
+    #bot { margin-top: 26px; }
+    .bot-controls button { padding: 9px 10px; font-size: .82rem; }
   }
 </style>
 </head>
@@ -301,12 +375,16 @@
   <header>
     <h1>♟ Offline Chess Bot</h1>
     <div class="controls">
-      <button id="flip">Flip board</button>
-      <button id="reset">New game</button>
+      <button id="undo" type="button" disabled>↶ Undo</button>
+      <button id="flip" type="button">Flip board</button>
+      <button id="reset" type="button">New game</button>
     </div>
   </header>
 
-  <div id="status" aria-live="polite"></div>
+  <div class="statusbar">
+    <div id="status" aria-live="polite"></div>
+    <div id="counter" aria-live="polite"></div>
+  </div>
 
   <div class="chess-layout">
     <div id="board" role="grid" aria-label="Chess board"></div>
@@ -314,7 +392,9 @@
   </div>
 
   <p class="hint">
-    Hide either side’s advice at any time. A hidden side’s ghost moves are hidden too.
+    Only the side to move gets advice and ghost moves — the other side’s are hidden until their turn.
+    You can also hide a side’s advice completely. Made a mistake on the app? Tap Undo (as many times as you need)
+    to match the real board.
   </p>
 </main>
 
@@ -324,13 +404,18 @@
     <p id="win-message"></p>
     <img src="./meme-hamster.gif" alt="Hamster dance celebration">
     <button id="close-win" type="button">Back to the board</button>
+    <button id="undo-win" class="secondary" type="button">Undo last move</button>
   </section>
 </div>
 
 <script>
+// Solid glyphs for both colours (coloured via CSS). \uFE0E forces text
+// rendering so phones don't swap the pawn for an emoji.
 const glyph = {
-  wk: "♔", wq: "♕", wr: "♖", wb: "♗", wn: "♘", wp: "♙",
-  bk: "♚", bq: "♛", br: "♜", bb: "♝", bn: "♞", bp: "♟"
+  wk: "\u265A\uFE0E", wq: "\u265B\uFE0E", wr: "\u265C\uFE0E",
+  wb: "\u265D\uFE0E", wn: "\u265E\uFE0E", wp: "\u265F\uFE0E",
+  bk: "\u265A\uFE0E", bq: "\u265B\uFE0E", br: "\u265C\uFE0E",
+  bb: "\u265D\uFE0E", bn: "\u265E\uFE0E", bp: "\u265F\uFE0E"
 };
 
 const files = "abcdefgh";
@@ -344,6 +429,7 @@ let selected = null;
 let selectedMoves = [];
 let flipped = false;
 let analysisId = 0;
+let history = [];   // snapshots of earlier positions, used by Undo
 
 const hidden = { w: false, b: false };
 const rankedMoves = { w: null, b: null };
@@ -359,6 +445,7 @@ function closeWinnerPopup() {
 }
 
 document.querySelector("#close-win").addEventListener("click", closeWinnerPopup);
+document.querySelector("#undo-win").addEventListener("click", () => undoMove());
 
 document.querySelector("#win-modal").addEventListener("click", event => {
   if (event.target.id === "win-modal") closeWinnerPopup();
@@ -390,6 +477,7 @@ function newGame() {
     fullmove: 1
   };
 
+  history = [];
   selected = null;
   selectedMoves = [];
   rankedMoves.w = null;
@@ -402,6 +490,56 @@ function newGame() {
 
 function setStatus(message) {
   document.querySelector("#status").textContent = message;
+}
+
+function updateCounter() {
+  const played = history.length;
+  document.querySelector("#counter").innerHTML = `
+    <span class="chip">Move ${game.fullmove}</span>
+    <span class="chip">${played} ${played === 1 ? "move" : "moves"} played</span>
+  `;
+
+  const undoButton = document.querySelector("#undo");
+  undoButton.disabled = played === 0;
+  undoButton.textContent = played ? `↶ Undo (${played})` : "↶ Undo";
+}
+
+// Updates the status line for the current position. Returns true on checkmate.
+function refreshStatus(announce, prefix = "") {
+  const sideName = game.turn === "w" ? "White" : "Black";
+  const moves = legalMoves(game, game.turn);
+
+  if (moves.length === 0 && inCheck(game, game.turn)) {
+    const winner = sideName === "White" ? "Black" : "White";
+    setStatus(`Checkmate. ${winner} wins!`);
+    if (announce) showWinnerPopup(winner);
+    return true;
+  }
+
+  if (moves.length === 0 || isDraw(game)) {
+    setStatus(prefix + "Draw.");
+  } else if (inCheck(game, game.turn)) {
+    setStatus(`${prefix}${sideName} to move — check!`);
+  } else {
+    setStatus(`${prefix}${sideName} to move.`);
+  }
+
+  return false;
+}
+
+function undoMove() {
+  if (history.length === 0) return;
+
+  game = history.pop();
+  selected = null;
+  selectedMoves = [];
+  rankedMoves.w = null;
+  rankedMoves.b = null;
+  closeWinnerPopup();
+
+  renderBoard();
+  refreshStatus(false, "Move undone. ");
+  updateBot();
 }
 
 function inBounds(y, x) {
@@ -962,18 +1100,15 @@ function bestTiedMoves(results) {
   return results.filter(result => Math.round(result.score / 10) === bestDisplayedScore);
 }
 
+// Only the side to move ever sees ghost moves (and only if not manually hidden).
 function visibleGhostMoves() {
-  const ghosts = [];
+  const color = game.turn;
+  if (hidden[color]) return [];
 
-  for (const color of ["w", "b"]) {
-    if (hidden[color]) continue;
-
-    for (const result of bestTiedMoves(rankedMoves[color])) {
-      ghosts.push({ color, move: result.move });
-    }
-  }
-
-  return ghosts;
+  return bestTiedMoves(rankedMoves[color]).map(result => ({
+    color,
+    move: result.move
+  }));
 }
 
 function renderRankings(title, color, results, position) {
@@ -1003,9 +1138,33 @@ function renderRankings(title, color, results, position) {
   `;
 }
 
+function sideSection(color) {
+  const name = color === "w" ? "White" : "Black";
+  const isTurn = game.turn === color;
+
+  // The side NOT to move gets nothing: no advice, no ghosts.
+  if (!isTurn) {
+    return `<h3>${name}’s top moves</h3>
+      <p class="bot-status">Hidden — advice appears on ${name}’s turn.</p>`;
+  }
+
+  if (hidden[color]) {
+    return `<h3 class="turn-highlight">${name}’s top moves · To move</h3>
+      <p class="bot-status">${name} advice and ghost moves are hidden.</p>`;
+  }
+
+  if (rankedMoves[color]) {
+    return renderRankings(`${name}’s top moves`, color, rankedMoves[color], game);
+  }
+
+  return `<h3 class="turn-highlight">${name}’s top moves · To move</h3>
+    <p class="bot-status">Thinking…</p>`;
+}
+
 function drawBotPanel() {
   const panel = document.querySelector("#bot");
   const bothHidden = hidden.w && hidden.b;
+  const turnHidden = hidden[game.turn];
 
   panel.innerHTML = `
     <div class="bot-avatar" title="Pinky the offline chess bot">🤖</div>
@@ -1017,22 +1176,10 @@ function drawBotPanel() {
       <button data-action="both">${bothHidden ? "Show both" : "Hide both"}</button>
     </div>
 
-    ${hidden.w
-      ? "<p class='bot-status'>White advice and White ghost moves are hidden.</p>"
-      : rankedMoves.w
-        ? renderRankings("White’s top moves", "w", rankedMoves.w, game)
-        : `<h3 class="${game.turn === "w" ? "turn-highlight" : ""}">White’s top moves${game.turn === "w" ? " · To move" : ""}</h3><p class="bot-status">Thinking…</p>`
-    }
+    ${sideSection("w")}
+    ${sideSection("b")}
 
-    ${hidden.b
-      ? "<p class='bot-status'>Black advice and Black ghost moves are hidden.</p>"
-      : rankedMoves.b
-        ? renderRankings("Black’s top moves", "b", rankedMoves.b, game)
-        : `<h3 class="${game.turn === "b" ? "turn-highlight" : ""}">Black’s top moves${game.turn === "b" ? " · To move" : ""}</h3><p class="bot-status">Thinking…</p>`
-    }
-
-    ${bothHidden ? "<p class='bot-status'>Both sides’ advice is hidden.</p>" : ""}
-    ${!bothHidden ? "<p class='bot-score'>Ghosts show the top move or tied top moves.</p>" : ""}
+    ${!turnHidden ? "<p class='bot-score'>Ghosts show the top move or tied top moves for the side to move.</p>" : ""}
   `;
 
   panel.querySelectorAll("[data-action]").forEach(button => {
@@ -1057,22 +1204,16 @@ function drawBotPanel() {
 async function updateBot() {
   const runId = ++analysisId;
   const position = clonePosition(game);
+  const color = position.turn;   // only analyse the side to move
 
   rankedMoves.w = null;
   rankedMoves.b = null;
   drawBotPanel();
 
-  const white = await rankMoves(position, "w", runId);
-  if (runId !== analysisId || !white) return;
+  const results = await rankMoves(position, color, runId);
+  if (runId !== analysisId || !results) return;
 
-  rankedMoves.w = white;
-  drawBotPanel();
-  renderBoard();
-
-  const black = await rankMoves(position, "b", runId);
-  if (runId !== analysisId || !black) return;
-
-  rankedMoves.b = black;
+  rankedMoves[color] = results;
   drawBotPanel();
   renderBoard();
 }
@@ -1080,6 +1221,7 @@ async function updateBot() {
 function renderBoard() {
   const element = document.querySelector("#board");
   const ghosts = visibleGhostMoves();
+  updateCounter();
   const whiteChecked = inCheck(game, "w");
   const blackChecked = inCheck(game, "b");
 
@@ -1192,26 +1334,15 @@ function handleSquare(y, x) {
       ) || chosenMove;
     }
 
+    history.push(clonePosition(game));
     game = applyMove(game, move);
     selected = null;
     selectedMoves = [];
+    rankedMoves.w = null;
+    rankedMoves.b = null;
     renderBoard();
 
-    const sideName = game.turn === "w" ? "White" : "Black";
-    const moves = legalMoves(game, game.turn);
-
-    if (moves.length === 0 && inCheck(game, game.turn)) {
-      const winner = sideName === "White" ? "Black" : "White";
-      setStatus(`Checkmate. ${winner} wins!`);
-      showWinnerPopup(winner);
-    } else if (moves.length === 0 || isDraw(game)) {
-      setStatus("Draw.");
-    } else if (inCheck(game, game.turn)) {
-      setStatus(`${sideName} to move — check!`);
-    } else {
-      setStatus(`${sideName} to move.`);
-    }
-
+    refreshStatus(true);
     updateBot();
     return;
   }
@@ -1248,6 +1379,7 @@ document.querySelector("#flip").onclick = () => {
   renderBoard();
 };
 
+document.querySelector("#undo").onclick = undoMove;
 document.querySelector("#reset").onclick = newGame;
 
 newGame();
